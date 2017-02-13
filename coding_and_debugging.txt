@@ -1,0 +1,189 @@
+﻿
+=================================================================================
+获取时间：本周、本月、上个月、前三个月     Calendar
+	/**
+	 * 设置筛选时间
+	 * @param qv
+	 */
+	private void getQueryVoOrderDate(QueryVo qv){
+		if(StringUtils.isBlank(qv.getOrderDate())) {
+			qv.setOrderDate("week");
+		}
+		
+		if(StringUtils.isNotBlank(qv.getOrderDate())) {
+			SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+			Calendar cal = Calendar.getInstance();//获取当前日期 
+			Date d = new Date();
+			String startDate = sdf.format(d);
+			String endDate = sdf.format(d);
+			if("week".equals(qv.getOrderDate())){//本周
+				//cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY);
+				int n = 0;
+				if(cal.get(Calendar.DAY_OF_WEEK)==1){
+					n = -6;
+				}else{
+					n = 2-cal.get(Calendar.DAY_OF_WEEK);
+				}
+				cal.add(Calendar.DAY_OF_WEEK, n);
+				startDate = sdf.format(cal.getTime());
+			}
+			if("thismonth".equals(qv.getOrderDate())){//本月
+				cal.set(Calendar.DAY_OF_MONTH, 1);//设置当前月第一天
+				startDate = sdf.format(cal.getTime());
+			}
+			if("lastmonth".equals(qv.getOrderDate())){//上个月
+				cal.set(Calendar.DAY_OF_MONTH, 0);//获取上一个月的最后一天
+				endDate = sdf.format(cal.getTime());
+				cal.add(Calendar.MONTH, 0);
+				cal.set(Calendar.DAY_OF_MONTH, 1);//获取上个月的第一天
+				startDate = sdf.format(cal.getTime());
+			}
+			/*if("threemonth".equals(qv.getOrderDate())){//近三个月
+				cal.add(Calendar.MONTH, -3);
+				cal.set(Calendar.DAY_OF_MONTH, 1);
+				startDate = sdf.format(cal.getTime());
+			}*/
+			qv.setStartDate(startDate+" 00:00:00");
+			qv.setEndDate(endDate+" 23:59:59");
+		}
+	}
+	
+=================================================================================
+SQL语句条件拼接
+	/**
+	 * 派工单页面，控制了安装类型，明细产品要一致，排除了税控和企业共存的情况
+	 * 主表产品要和明细第一列产品一致，排除了主表产品不正确的情况
+	 * 所以直接通过主表产品来判断企业安装和税控安装
+	 */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public Page queryListByTelbillstatus(QueryBean query, Page page){
+		List<Object> pList = new ArrayList<Object>();
+		StringBuffer selectSql = new StringBuffer("");
+		selectSql.append("SELECT SM.DISPATCH_ID, " +//派工单号
+				"SM.CUSTOMER_ID, " +//客户ID
+				"SM.CUSTOMER_NAME, " +//客户名称
+				"SM.CUSTOMER_TAX_ID, " +//客户税号
+				"SM.TEL, " +//电话
+				"SM.CONTACT, " +//联系人
+				"nvl(SM.OFFICE_SPACE, '无') as OFFICE_SPACE, " +//地址
+				"SM.MOBILE, " +//手机
+				"CASE WHEN SM.SERVICE_TYPE_ID=1 THEN 1 		WHEN SM.SERVICE_TYPE_ID=4 THEN 2 	  WHEN SM.SERVICE_TYPE_ID=2 THEN (CASE WHEN SM.PRODUCT_ID = 8 THEN 3 		 WHEN SM.PRODUCT_ID = 729 THEN 4 ELSE 5 END) ELSE -1 END AS SERVICE_TYPE_FLAG,"+
+				"CASE WHEN SM.SERVICE_TYPE_ID=1 THEN '维护单' WHEN SM.SERVICE_TYPE_ID=4 THEN '回访单' WHEN SM.SERVICE_TYPE_ID=2 THEN (CASE WHEN SM.PRODUCT_ID = 8 THEN '企业安装单' WHEN SM.PRODUCT_ID = 729 THEN '防伪安装单' ELSE '其它安装单' END) ELSE '无' END AS SERVICE_TYPE_NAME,"+
+				"P.PRODUCT_NAME, " +//产品名称
+				"to_char(SM.RESERVATION, 'yyyy-MM-dd HH:mm:ss') AS RESERVATIONSTR, " +//预约时间
+				"to_char(SM.DIS_DATE, 'yyyy-MM-dd HH:mm:ss') AS DIS_DATESTR, " +//派工时间
+				"to_char(SM.ARRIVE_DATE, 'yyyy-MM-dd HH:mm:ss') AS ARRIVE_DATESTR, " +//签到时间
+				"to_char(SM.DONE_DATE, 'yyyy-MM-dd HH:mm:ss') AS DONE_DATESTR, " +//签退时间
+				"SM.DISPATCH_STATUS_ID," +//派工状态
+				"'" + query.getOpState() + "' AS OP_STATE" +//状态 
+				"");
+		StringBuffer fromSql = new StringBuffer(" FROM SM_DISPATCH SM, SYS_PRODUCT_TYPE P");
+		fromSql.append(" WHERE SM.PRODUCT_ID = P.PRODUCT_ID AND (SM.DISPATCH_STATUS_ID=6 OR SM.DISPATCH_STATUS_ID=8 OR SM.DISPATCH_STATUS_ID=9 OR SM.DISPATCH_STATUS_ID=10)"); 
+		fromSql.append(" AND (SM.SERVICE_TYPE_ID = 1 OR SM.SERVICE_TYPE_ID = 4 OR (SM.SERVICE_TYPE_ID=2 AND (SM.PRODUCT_ID = 8 OR SM.PRODUCT_ID = 729)))");
+		
+		if(StringUtils.isNotBlank(query.getProcesserId())){
+			fromSql.append(" AND SM.PROCESSER_ID = ?");
+			pList.add(query.getProcesserId());//服务人
+		}
+		if(StringUtils.isNotBlank(query.getStartDate())){
+			fromSql.append("AND TO_CHAR(SM.DIS_DATE,'YYYY-MM-DD')>=?");
+			pList.add(query.getStartDate());
+		}
+		if(StringUtils.isNotBlank(query.getEndDate())){
+			fromSql.append("AND TO_CHAR(SM.DIS_DATE,'YYYY-MM-DD')<=?");
+			pList.add(query.getEndDate());
+		}
+		if(null != query.getServiceTypeId()){//工单类型 
+			int SERVICE_TYPE_ID = query.getServiceTypeId().intValue();
+			if(1 == SERVICE_TYPE_ID || 2 == SERVICE_TYPE_ID || 3 == SERVICE_TYPE_ID || 4 == SERVICE_TYPE_ID){
+				fromSql.append(" AND SM.SERVICE_TYPE_ID = ?");
+				if(1 == SERVICE_TYPE_ID){//1维护单
+					pList.add(1);
+				}else if(2 == SERVICE_TYPE_ID){//2回访单
+					pList.add(4);
+				}else if(3 == SERVICE_TYPE_ID){//3防伪安装单
+					pList.add(2);
+					fromSql.append(" AND P.PRODUCT_ID = 729");
+				}else if(4 == SERVICE_TYPE_ID){//4企业安装单
+					pList.add(2);
+					fromSql.append(" AND P.PRODUCT_ID = 8");
+				}
+			}
+		}
+		if(StringUtils.isNotBlank(query.getQuery())){
+			fromSql.append(" AND (SM.CUSTOMER_NAME like ? or SM.CONTACT like ?  or SM.MOBILE like ?)");
+			pList.add("%"+query.getQuery()+"%");
+			pList.add("%"+query.getQuery()+"%");
+			pList.add("%"+query.getQuery()+"%");
+		}
+		String orderStr = "";
+		if(StringUtils.isNotBlank(query.getOpState())){
+			//排序
+			orderStr = " order by SM.RESERVATION asc";//预约时间
+			//工单状态
+			if("dispatch".equals(query.getOpState())){
+				fromSql.append(" AND SM.DISPATCH_STATUS_ID = 6");
+				if(1 == query.getOrderFlag()){
+					orderStr = " order by SM.DIS_DATE asc";//派工时间
+				}else if(2 == query.getOrderFlag()){
+					orderStr = " order by SM.OFFICE_SPACE asc";//地址
+				}
+			}else if("arrive".equals(query.getOpState())){
+				fromSql.append(" AND SM.DISPATCH_STATUS_ID = 8");
+				orderStr = " order by SM.ARRIVE_DATE asc";//签到时间
+			}else if("complete".equals(query.getOpState())){
+				fromSql.append(" AND SM.DISPATCH_STATUS_ID = 9");
+				orderStr = " order by SM.DONE_DATE asc";//签退时间
+			}else if("close".equals(query.getOpState())){
+				fromSql.append(" AND SM.DISPATCH_STATUS_ID = 10");
+				orderStr = " order by SM.DIS_DATE asc";//派工时间
+			}else{
+				fromSql.append(" AND SM.DISPATCH_STATUS_ID = -1");
+			}
+		}
+		StringBuffer queryCountSql = new StringBuffer("select count(*)").append(fromSql);
+		return baseJdbcDAO.showPage(selectSql.append(fromSql).append(orderStr).toString(), queryCountSql.toString(), pList.toArray(), page, SmDispatch.class);
+	}
+	
+=================================================================================
+SQL:sum  和  case when 
+	--工单首页：首页总览
+	select sum(case when sm.DISPATCH_STATUS_ID=6 then 1 else 0 end) as DISPATCH_NUM, 
+		   sum(case when sm.DISPATCH_STATUS_ID=8 then 1 else 0 end) as ARRIVE_NUM, 
+		   sum(case when sm.DISPATCH_STATUS_ID=9 then 1 else 0 end) as COMPLETE_NUM, 
+		   sum(case when sm.DISPATCH_STATUS_ID=10 then 1 else 0 end) as CLOSE_NUM 
+		   from SM_DISPATCH sm  where SM.PROCESSER_ID = 200561 and 
+		   (sm.DISPATCH_STATUS_ID=6 or sm.DISPATCH_STATUS_ID=8 or sm.DISPATCH_STATUS_ID=9 or sm.DISPATCH_STATUS_ID=10) and 
+		   (SM.SERVICE_TYPE_ID = 1 or SM.SERVICE_TYPE_ID = 4 or (SM.SERVICE_TYPE_ID=2 and (SM.PRODUCT_ID = 8 or SM.PRODUCT_ID = 729)));
+
+=================================================================================
+
+=================================================================================
+
+=================================================================================
+
+=================================================================================
+
+=================================================================================
+
+=================================================================================
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
+		   
