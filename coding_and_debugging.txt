@@ -191,6 +191,33 @@ public class SmDispatchController extends BaseController{
 =================================================================================
 javaBean的操作：
 可以用VO的方式，添加数据库中没有，但页面需要的现实的字段。例如根据服务方式Id来现实服务名称。
+public class PvVisitBill extends AbstractPvVisitBill{
+	private String product_name;
+	private Integer satisfaction;//满意度 很满意：2   满意：1   不满意：0
+	private Integer isChangeClientInfo;//是否修改地址 1：修改
+	private String service_evaluation_name;//服务总体评价 ：2很满意,1满意,0不满意
+	private String product_evaluation_name;//产品总体评价：2很满意,1满意,0不满意
+	
+	public String getProduct_evaluation_name() {
+		if(getProduct_evaluation() != null) {
+			long evaluation = getProduct_evaluation();
+			if(evaluation == 2) {
+				setProduct_evaluation_name("很满意");
+			}
+			if(evaluation == 1) {
+				setProduct_evaluation_name("满意");
+			}
+			if(evaluation == 0) {
+				setProduct_evaluation_name("不满意");
+			}
+		}
+		return product_evaluation_name;
+	}
+	public void setProduct_evaluation_name(String product_evaluation_name) {
+		this.product_evaluation_name = product_evaluation_name;
+	}
+	。。。。。。
+}
 =================================================================================
 
 =================================================================================
