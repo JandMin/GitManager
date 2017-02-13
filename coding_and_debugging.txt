@@ -157,7 +157,37 @@ SQL:sum  和  case when
 		   (SM.SERVICE_TYPE_ID = 1 or SM.SERVICE_TYPE_ID = 4 or (SM.SERVICE_TYPE_ID=2 and (SM.PRODUCT_ID = 8 or SM.PRODUCT_ID = 729)));
 
 =================================================================================
-
+/**
+ * 派工  Controller
+ *
+ */
+@Controller
+@RequestMapping(value="/crmapp/allow/smDispatchCtl",produces="text/plain;charset=utf-8")
+public class SmDispatchController extends BaseController{
+	@Autowired
+	private SmDispatchService smDispatchService;
+	/**
+	 * 首页总览
+	 * http://127.0.0.1:8080/CrmAppServer/crmapp/allow/smDispatchCtl/queryMain.do?cemp=200561
+	 */
+	@RequestMapping(value="/queryMain.do")
+	@ResponseBody
+	public String queryMain(QueryBean query, User user){
+		Map<String, Object> result = new HashMap<String, Object>();
+		result.put("result", false);
+		try {
+			query.setProcesserId(String.valueOf(user.getCemp()));
+			Map<String, Object> map = smDispatchService.getCountByTelbillstatus(query, user);
+			result.put("data", map);
+			result.put("result", true);
+		} catch (BaseRunException e) {
+			result.put("msg", e.getMessage());
+		} catch (Exception e) {
+			result.put("msg", e.getMessage());
+		}
+		return JSONObject.toJSONString(result);
+	}
+}
 =================================================================================
 
 =================================================================================
