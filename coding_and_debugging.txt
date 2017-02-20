@@ -145,6 +145,21 @@ SQL语句条件拼接
 		return baseJdbcDAO.showPage(selectSql.append(fromSql).append(orderStr).toString(), queryCountSql.toString(), pList.toArray(), page, SmDispatch.class);
 	}
 	
+	/*分类统计数据，case when 条件*/
+	public Map<String, Object> getCountByTelbillstatus(QueryBean query){
+		StringBuffer sql = new StringBuffer("");
+		sql.append(" select sum(case when sm.DISPATCH_STATUS_ID=6 then 1 else 0 end) as DISPATCH_NUM,"); //已派工
+		sql.append(" sum(case when sm.DISPATCH_STATUS_ID=8 then 1 else 0 end) as ARRIVE_NUM,"); //已上门
+		sql.append(" sum(case when sm.DISPATCH_STATUS_ID=9 then 1 else 0 end) as COMPLETE_NUM,"); //已完成
+		sql.append(" sum(case when sm.DISPATCH_STATUS_ID=10 then 1 else 0 end) as CLOSE_NUM"); //已结单
+		sql.append(" from SM_DISPATCH sm "); 
+		sql.append(" where SM.PROCESSER_ID = ? and (sm.DISPATCH_STATUS_ID=6 or sm.DISPATCH_STATUS_ID=8 or sm.DISPATCH_STATUS_ID=9 or sm.DISPATCH_STATUS_ID=10)"); 
+		sql.append(" and (SM.SERVICE_TYPE_ID = 1 or SM.SERVICE_TYPE_ID = 4 or (SM.SERVICE_TYPE_ID=2 and (SM.PRODUCT_ID = 8 or SM.PRODUCT_ID = 729)))");
+		List<Map<String, Object>> list = baseJdbcDAO.getJdbcTemplate().queryForList(sql.toString(), new Object[]{query.getProcesserId()});
+		return null==list||list.isEmpty()? null: list.get(0);
+	}
+	
+	
 =================================================================================
 SQL:sum  和  case when 
 	--工单首页：首页总览
@@ -219,7 +234,48 @@ public class PvVisitBill extends AbstractPvVisitBill{
 	。。。。。。
 }
 =================================================================================
-
+修改数据库信息时，获取修改的SQL语句:
+	public int update(SmMaintain sm){
+		List<Object> params = new ArrayList<Object>();
+		Map<String, Object> notMap = new HashMap<String, Object>();
+		notMap.put("maintain_id", "maintain_id");
+		String sql = baseJdbcDAO.getUpdateSql("SM_MAINTAIN", "t", sm, AbstractSmMaintain.class, notMap, params);
+		sql += " where t.maintain_id = ?";
+		params.add(sm.getMaintain_id());
+		return baseJdbcDAO.getJdbcTemplate().update(sql, params.toArray());
+	}
+	@Repository
+	public class BaseJdbcDaoImpl implements BaseJdbcDAO{
+		@Autowired
+		private JdbcTemplate jdbcTemplate;
+		
+		public String getUpdateSql(String tableName,String byname,Object obj,Class c,Map<String,Object> notMap,List<Object> params) {
+			StringBuffer sqlBuffer = new StringBuffer("");
+			try {
+				Field[] fields = c.getDeclaredFields();//获取类中所有字段
+				if(fields != null) {
+					sqlBuffer.append("update ").append(tableName).append(" ").append(byname).append(" set ");
+					String fieldName = "";
+					for(Field field : Field) {
+						field.setAccessible(true);
+						fieldName = field.getName();					
+						if("serialVersionUID".equals(fieleName) || notMap.get(fieldName) != null) {
+							continue;
+						}
+						sqlBuffer.append(byname).append(".").append(fieldName).append(" = ?,");
+						params.add(field.get(obj));
+					}
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			} 
+			String sql = sqlBuffer.toString();
+			if(sql.endWith(",")) {
+				sql = sql.substring(0,sql.length()-1);
+			}
+			return sql;
+		}
+	}
 =================================================================================
 
 =================================================================================
