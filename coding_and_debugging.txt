@@ -170,6 +170,16 @@ SQL:sum  和  case when
 		   from SM_DISPATCH sm  where SM.PROCESSER_ID = 200561 and 
 		   (sm.DISPATCH_STATUS_ID=6 or sm.DISPATCH_STATUS_ID=8 or sm.DISPATCH_STATUS_ID=9 or sm.DISPATCH_STATUS_ID=10) and 
 		   (SM.SERVICE_TYPE_ID = 1 or SM.SERVICE_TYPE_ID = 4 or (SM.SERVICE_TYPE_ID=2 and (SM.PRODUCT_ID = 8 or SM.PRODUCT_ID = 729)));
+--行政区划是否有子集
+select sao.administrative_organ_id,sao.administrative_organ_name,sao.parent_id,
+       case when sao.administrative_organ_id in (select a.parent_id from SYS_ADMINISTRATIVE_ORGAN a) then 1 else 0 end AS isParent
+       from SYS_ADMINISTRATIVE_ORGAN sao;--0.02秒
+select aa.administrative_organ_id,aa.administrative_organ_name,aa.parent_id,max(aa.pflag)      
+ from (select a.administrative_organ_id,a.administrative_organ_name,a.parent_id,case when b.administrative_organ_id is not null then 1 else 0 end as pflag
+ from SYS_ADMINISTRATIVE_ORGAN a
+ left join SYS_ADMINISTRATIVE_ORGAN b on a.administrative_organ_id = b.parent_id) aa
+ group by aa.administrative_organ_id,aa.administrative_organ_name,aa.parent_id;--0.01秒
+
 
 =================================================================================
 /**
