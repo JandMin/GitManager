@@ -488,7 +488,35 @@ alter table CUS_ORG_CUSTOMER
     minextents 1
     maxextents unlimited
   );  
-  
+=================================================================================
+分组删选：
+--服务过的客户：同一个客户的记录显示最新的
+select distinct ORG_CUSTOMER_ID,CUST_NAME,ADDR,DIS_DATE
+  from (select rank() over(partition by temp.ORG_CUSTOMER_ID order by orderdate desc) rk,
+               temp.*
+          from (SELECT c.ORG_CUSTOMER_ID,
+                       c.CUST_NAME,
+                       s.OFFICE_SPACE AS ADDR,
+                       s.dis_date as orderdate,
+                       CASE
+                         WHEN TO_CHAR(s.DIS_DATE, 'yyyy-MM-dd') =
+                              TO_CHAR(SYSDATE, 'yyyy-MM-dd') THEN
+                          TO_CHAR(s.DIS_DATE, 'HH24:mi:ss')
+                         ELSE
+                          TO_CHAR(s.DIS_DATE, 'yyyy-MM-dd')
+                       END AS DIS_DATE
+                  FROM SM_DISPATCH s, CUS_ORG_CUSTOMER c
+                 WHERE c.ORG_CUSTOMER_ID = s.CUSTOMER_ID
+                   AND s.DISPATCH_STATUS_ID IN (9, 10)
+                   AND c.IS_VALID = 1
+                   AND s.IS_OVER = 0
+                   AND s.PROCESSER_ID = 205337
+                  -- AND (c.CUST_NAME LIKE ? OR c.CUST_NAME_PINYIN LIKE ?)
+                   AND TO_CHAR(s.DIS_DATE, 'YYYY-MM-DD HH24:mi:ss') >= '2017-03-01 00:00:00'
+                   AND TO_CHAR(s.DIS_DATE, 'YYYY-MM-DD HH24:mi:ss') <= '2017-03-25 23:59:59'
+                 ORDER BY DIS_DATE DESC) temp) t
+ where t.rk = 1
+ ORDER BY DIS_DATE DESC;
 =================================================================================
 /**
  * 派工  Controller
@@ -621,6 +649,31 @@ public class CheckVersionUtil {
 	}
 }
 =================================================================================
+自定义异常类：
+public class BaseRunException extends RuntimeException{
+	private static final long serialVersionUID = 1L;
+	
+	private String msg;
+
+	public BaseRunException(String mess,Exception ex) {
+		super(mess,ex);
+		this.setMsg(mess);
+	}
+	public BaseRunException(String mess) {
+		super(mess);
+		this.setMsg(mess);
+	}
+	public String getMsg() {
+		return msg;
+	}
+
+	public void setMsg(String msg) {
+		if(StringUtils.isBlank(msg)){
+			msg="操作失败";
+		}
+		this.msg = msg;
+	}
+}
 
 =================================================================================
 
